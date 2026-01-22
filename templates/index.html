@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Chat Interface</title>
+    <style>
+        :root {
+            --primary-bg: #f4f7f6;
+            --secondary-bg: #ffffff;
+            --text-color: #333;
+            --accent-color: #007bff;
+            --user-msg-bg: #dcf8c6;
+            --assistant-msg-bg: #f1f0f0;
+            --border-color: #e0e0e0;
+        }
+        body {
+            /* Increase base font size for better readability */
+            font-size: 18px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            /* Global font weight bold for clarity */
+            font-weight: 500;
+            margin: 0;
+            background-color: var(--primary-bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: var(--text-color);
+        }
+        .container {
+            display: flex;
+            /* Adjust container size to be more square, suitable for screenshots */
+            width: 85%;
+            max-width: 1100px;
+            height: 85vh;
+            background-color: var(--secondary-bg);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1); /* Fixed previous typo S12px -> 12px */
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .chat-panel {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border-color);
+            min-width: 0;
+        }
+        .context-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: #fafafa;
+            min-width: 0;
+        }
+        .panel-header {
+            /* Increase padding and font size to make title stand out */
+            padding: 20px;
+            font-size: 1.25em;
+            font-weight: 600; /* Higher weight here to override body's 500, keeping title prominent */
+            border-bottom: 1px solid var(--border-color);
+            background-color: #f8f9fa;
+        }
+        .chat-history {
+            flex-grow: 1;
+            /* Increase padding to make chat history area more spacious */
+            padding: 24px;
+            overflow-y: auto;
+        }
+        .message {
+            /* Increase message spacing */
+            margin-bottom: 24px;
+            display: flex;
+            flex-direction: column;
+        }
+        .message .content {
+            /* Increase bubble padding, text not close to edge */
+            padding: 14px 20px;
+            border-radius: 20px;
+            max-width: 80%;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+        .user-message {
+            align-items: flex-end;
+        }
+        .user-message .content {
+            background-color: var(--user-msg-bg);
+            color: #1a1a1a;
+            border-bottom-right-radius: 5px;
+        }
+        .assistant-message {
+            align-items: flex-start;
+        }
+        .assistant-message .content {
+            background-color: var(--assistant-msg-bg);
+            border-bottom-left-radius: 5px;
+        }
+        .loading-indicator {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+        }
+        .loading-indicator span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--accent-color);
+            margin: 0 3px;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .loading-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .loading-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1.0); }
+        }
+        .chat-input {
+            /* Increase input area padding */
+            padding: 24px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+        }
+        .chat-input textarea {
+            flex-grow: 1;
+            /* Increase input box padding and font size */
+            padding: 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            resize: none;
+            font-size: 1em; /* Will inherit body's 18px */
+            margin-right: 10px;
+        }
+        .chat-input button {
+            /* Increase button padding to make it taller */
+            padding: 14px 22px;
+            border: none;
+            background-color: var(--accent-color);
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em; /* Will inherit body's 18px */
+            transition: background-color 0.2s;
+        }
+        .chat-input button:hover {
+            background-color: #0056b3;
+        }
+        #context-display {
+            flex-grow: 1;
+            /* Increase reference area padding and font size */
+            padding: 24px;
+            overflow-y: auto;
+            font-size: 0.95em; /* Slightly smaller than base, but larger than before */
+            line-height: 1.6;
+            color: #555;
+        }
+        .context-item {
+            background-color: var(--secondary-bg);
+            border: 1px solid #eee;
+            border-radius: 8px;
+            /* Increase reference item padding and spacing */
+            padding: 18px;
+            margin-bottom: 18px;
+        }
+        .context-item-header {
+            font-weight: bold; /* bold is usually 700, will override body's 500 */
+            color: var(--accent-color);
+            margin-bottom: 8px;
+        }
+
+        /* Style for code block container pre */
+        .content pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background-color: #f7f7f8;
+            color: #24292e;
+            border: 1px solid #e1e1e1;
+            padding: 16px;
+            border-radius: 15px;
+            font-size: 0.9em;
+        }
+
+        /* Style for code itself */
+        .content code {
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="chat-panel">
+            <div class="panel-header">GNU Radio Intelligent Assistant</div>
+            <div class="chat-history" id="chat-history">
+                <!-- Messages will be appended here -->
+                <div class="message assistant-message">
+                    <div class="content">What's on the agenda today?</div>
+                </div>
+            </div>
+            <div class="loading-indicator" id="loading">
+                <span></span><span></span><span></span>
+            </div>
+            <div class="chat-input">
+                <textarea id="query-input" placeholder="Ask Anything" rows="2"></textarea>
+                <button id="send-btn">Submit</button>
+            </div>
+        </div>
+        <div class="context-panel">
+            <div class="panel-header">Reference Knowledge</div>
+            <div id="context-display">
+                <p>References related to your question will be displayed here</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatHistory = document.getElementById('chat-history');
+        const queryInput = document.getElementById('query-input');
+        const sendBtn = document.getElementById('send-btn');
+        const contextDisplay = document.getElementById('context-display');
+        const loadingIndicator = document.getElementById('loading');
+
+        function addMessage(sender, text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}-message`;
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'content';
+
+            if (text.includes('\n')) {
+                const pre = document.createElement('pre');
+                const code = document.createElement('code');
+                code.textContent = text;
+                pre.appendChild(code);
+                contentDiv.appendChild(pre);
+                contentDiv.style.padding = '0';
+                contentDiv.style.backgroundColor = 'transparent';
+
+            } else {
+                contentDiv.innerText = text;
+            }
+
+            messageDiv.appendChild(contentDiv);
+            chatHistory.appendChild(messageDiv);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+
+        function updateContext(contexts) {
+            contextDisplay.innerHTML = '';
+            if (!contexts || contexts.length === 0) {
+                contextDisplay.innerHTML = '<p>No relevant references found.</p>';
+                return;
+            }
+
+            contexts.forEach((ctx, index) => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'context-item';
+
+                const header = document.createElement('div');
+                header.className = 'context-item-header';
+                header.innerText = `Reference ${index + 1}: ${ctx.source} (Similarity: ${ctx.score.toFixed(4)})`;
+
+                const text = document.createElement('p');
+                text.innerText = ctx.text;
+
+                itemDiv.appendChild(header);
+                itemDiv.appendChild(text);
+                contextDisplay.appendChild(itemDiv);
+            });
+        }
+
+        async function handleSend() {
+            const query = queryInput.value.trim();
+            if (!query) return;
+
+            addMessage('user', query);
+            queryInput.value = '';
+            loadingIndicator.style.display = 'flex';
+            sendBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/query', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ query: query })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Unknown server error occurred');
+                }
+
+                const data = await response.json();
+                addMessage('assistant', data.answer);
+                updateContext(data.contexts);
+
+            } catch (error) {
+                addMessage('assistant', `Sorry, an error occurred while processing your request: ${error.message}`);
+                updateContext([]);
+            } finally {
+                loadingIndicator.style.display = 'none';
+                sendBtn.disabled = false;
+                queryInput.focus();
+            }
+        }
+
+        sendBtn.addEventListener('click', handleSend);
+        queryInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+            }
+        });
+    </script>
+</body>
+</html>
